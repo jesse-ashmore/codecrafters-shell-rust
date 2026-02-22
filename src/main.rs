@@ -5,8 +5,10 @@ fn main() {
     print!("$ ");
     io::stdout().flush().unwrap();
 
-    let command = read_input();
-    println!("{}: command not found", command.trim());
+    loop {
+        let command = read_input();
+        println!("{}: command not found", command.trim());
+    }
 }
 
 fn read_input() -> String {

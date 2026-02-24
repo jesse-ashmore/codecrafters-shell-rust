@@ -9,18 +9,38 @@ trait Command {
 }
 enum Cmd {
     Noop,
-    Exit,
+    Exit(String),
     NotFound(String),
-    Echo,
+    Echo(String),
+    Type(String),
+}
+
+impl Cmd {
+    fn get_name(&self) -> String {
+        match self {
+            Cmd::Noop => EMPTY_STRING,
+            Cmd::Exit(name) | Cmd::NotFound(name) | Cmd::Echo(name) | Cmd::Type(name) => {
+                name.to_string()
+            }
+        }
+    }
 }
 
 impl Command for Cmd {
     fn evaluate(&self, args: Args) -> Option<String> {
         match self {
-            Cmd::Exit => None,
+            Cmd::Exit(_) => None,
             Cmd::NotFound(cmd) => Some(format!("{}: command not found", cmd)),
-            Cmd::Echo => Some(args.0.join(" ")),
+            Cmd::Echo(_) => Some(args.0.join(" ")),
             Cmd::Noop => Some(EMPTY_STRING),
+            Cmd::Type(_) => {
+                let interpret = parse_cmd(&args.0.join(" "));
+                match interpret.0 {
+                    Cmd::Noop => Cmd::NotFound(EMPTY_STRING).evaluate(args),
+                    Cmd::NotFound(_) => interpret.0.evaluate(args),
+                    _ => Some(format!("{} is a shell builtin", &interpret.0.get_name())),
+                }
+            }
         }
     }
 }
@@ -43,17 +63,22 @@ fn read() -> (Cmd, Args) {
     io::stdout().flush().unwrap();
     let mut input = String::new();
     io::stdin().read_line(&mut input).unwrap();
+    parse_cmd(&input)
+}
+
+fn parse_cmd(input: &str) -> (Cmd, Args) {
     let mut parts = input.trim().split(" ");
 
     if let Some(command) = parts.next() {
-        let func = match command.trim() {
-            "exit" => Cmd::Exit,
-            "echo" => Cmd::Echo,
+        let trimmed = command.trim();
+        let func = match trimmed {
+            "exit" => Cmd::Exit(trimmed.to_string()),
+            "echo" => Cmd::Echo(trimmed.to_string()),
             other => Cmd::NotFound(other.to_string()),
         };
 
         let args: Vec<String> = match func {
-            Cmd::Echo => parts.map(|s| s.to_string()).collect(),
+            Cmd::Echo(_) => parts.map(|s| s.to_string()).collect(),
             _ => vec![],
         };
 

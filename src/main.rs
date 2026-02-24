@@ -18,12 +18,12 @@ fn read() -> String {
 }
 
 fn evaluate(command: &str) -> Option<impl Fn()> {
-    return match command {
+    return match command.trim() {
         "exit" => None,
         other => Some(|| not_found(other)),
     };
 }
 
 fn not_found(command: &str) {
-    println!("{}: command not found", command.trim());
+    println!("{}: command not found", command);
 }

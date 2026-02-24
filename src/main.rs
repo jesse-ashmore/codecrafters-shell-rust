@@ -74,6 +74,7 @@ fn parse_cmd(input: &str) -> (Cmd, Args) {
         let func = match trimmed {
             "exit" => Cmd::Exit(trimmed.to_string()),
             "echo" => Cmd::Echo(trimmed.to_string()),
+            "type" => Cmd::Type(trimmed.to_string()),
             other => Cmd::NotFound(other.to_string()),
         };
 

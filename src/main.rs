@@ -37,7 +37,7 @@ impl Command for Cmd {
                 let interpret = parse_cmd(&args.0.join(" "));
                 match interpret.0 {
                     Cmd::Noop => Cmd::NotFound(EMPTY_STRING).evaluate(args),
-                    Cmd::NotFound(_) => Some(format!("{}: not found", cmd)),
+                    Cmd::NotFound(cmd) => Some(format!("{}: not found", cmd)),
                     _ => Some(format!("{} is a shell builtin", &interpret.0.get_name())),
                 }
             }

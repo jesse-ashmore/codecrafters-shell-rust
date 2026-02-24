@@ -78,12 +78,7 @@ fn parse_cmd(input: &str) -> (Cmd, Args) {
             other => Cmd::NotFound(other.to_string()),
         };
 
-        let args: Vec<String> = match func {
-            Cmd::Echo(_) => parts.map(|s| s.to_string()).collect(),
-            _ => vec![],
-        };
-
-        return (func, Args(args));
+        return (func, Args(parts.map(|s| s.to_string()).collect()));
     }
 
     (Cmd::Noop, Args(vec![]))

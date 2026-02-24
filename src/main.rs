@@ -2,28 +2,48 @@
 use std::io::{self, Write};
 
 struct Args(Vec<String>);
+trait Command {
+    fn evaluate(&self, args: Args) -> Option<String>;
+}
+enum Cmd {
+    Exit,
+    NotFound(String),
+}
 
-fn main() {
-    while let Some(command) = evaluate(&read()) {
-        io::stdout().flush().unwrap();
+impl Command for Cmd {
+    fn evaluate(&self, args: Args) -> Option<String> {
+        match self {
+            Cmd::Exit => None,
+            Cmd::NotFound(cmd) => Some(format!("{}: command not found", cmd)),
+        }
     }
 }
 
-fn read() -> String {
+fn main() {
+    loop {
+        let (cmd, args) = read();
+
+        if let Some(output) = cmd.evaluate(args) {
+            println!("{output}");
+            io::stdout().flush().unwrap();
+        } else {
+            break;
+        }
+    }
+}
+
+fn read() -> (Cmd, Args) {
     print!("$ ");
     io::stdout().flush().unwrap();
     let mut command = String::new();
     io::stdin().read_line(&mut command).unwrap();
-    command.trim().to_string()
-}
 
-fn evaluate(command: &str) -> Option<impl Fn()> {
-    return match command.trim() {
-        "exit" => None,
-        other => Some(|| not_found(other)),
+    let func = match command.trim() {
+        "exit" => Cmd::Exit,
+        other => Cmd::NotFound(other.to_string()),
     };
-}
 
-fn not_found(command: &str) {
-    println!("{}: command not found", command);
+    let args = Args(vec![]);
+
+    (func, args)
 }

@@ -25,6 +25,7 @@ impl Cmd {
             Cmd::Exit(name) | Cmd::NotFound(name) | Cmd::Echo(name) | Cmd::Type(name) => {
                 name.to_string()
             }
+            Cmd::External(name, _) => name.to_string(),
         }
     }
 
@@ -46,6 +47,7 @@ impl Command for Cmd {
             Cmd::Echo(_) => Some(args.0.join(" ")),
             Cmd::Noop => Some(EMPTY_STRING),
             Cmd::Type(_) => builtin_type(args),
+            Cmd::External(_, _) => todo!("Must implement evaluate for Cmd::External"),
         }
     }
 }

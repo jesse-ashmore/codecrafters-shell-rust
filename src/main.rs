@@ -7,12 +7,15 @@ struct Args(Vec<String>);
 trait Command {
     fn evaluate(&self, args: Args) -> Option<String>;
 }
+
+#[derive(PartialEq, Eq)]
 enum Cmd {
     Noop,
     Exit(String),
     NotFound(String),
     Echo(String),
     Type(String),
+    External(String, String),
 }
 
 impl Cmd {
@@ -24,6 +27,15 @@ impl Cmd {
             }
         }
     }
+
+    fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "exit" => Some(Cmd::Exit(name.to_string())),
+            "echo" => Some(Cmd::Echo(name.to_string())),
+            "type" => Some(Cmd::Type(name.to_string())),
+            _ => None,
+        }
+    }
 }
 
 impl Command for Cmd {
@@ -33,15 +45,19 @@ impl Command for Cmd {
             Cmd::NotFound(cmd) => Some(format!("{}: command not found", cmd)),
             Cmd::Echo(_) => Some(args.0.join(" ")),
             Cmd::Noop => Some(EMPTY_STRING),
-            Cmd::Type(_) => {
-                let interpret = parse_cmd(&args.0.join(" "));
-                match interpret.0 {
-                    Cmd::Noop => Cmd::NotFound(EMPTY_STRING).evaluate(args),
-                    Cmd::NotFound(cmd) => Some(format!("{}: not found", cmd)),
-                    _ => Some(format!("{} is a shell builtin", &interpret.0.get_name())),
-                }
-            }
+            Cmd::Type(_) => builtin_type(args),
         }
+    }
+}
+
+fn builtin_type(args: Args) -> Option<String> {
+    let interpret = parse_cmd(&args.0.join(" "));
+
+    match interpret.0 {
+        Cmd::Noop => Cmd::NotFound(EMPTY_STRING).evaluate(args),
+        Cmd::NotFound(name) => Some(format!("{name}: not found")),
+        Cmd::External(name, path) => Some(format!("{name}: is {path}")),
+        _ => Some(format!("{} is a shell builtin", &interpret.0.get_name())),
     }
 }
 
@@ -70,16 +86,31 @@ fn parse_cmd(input: &str) -> (Cmd, Args) {
     let mut parts = input.trim().split(" ");
 
     if let Some(command) = parts.next() {
-        let trimmed = command.trim();
-        let func = match trimmed {
-            "exit" => Cmd::Exit(trimmed.to_string()),
-            "echo" => Cmd::Echo(trimmed.to_string()),
-            "type" => Cmd::Type(trimmed.to_string()),
-            other => Cmd::NotFound(other.to_string()),
-        };
+        let name = command.trim();
+        let func = Cmd::from_name(name);
 
-        return (func, Args(parts.map(|s| s.to_string()).collect()));
+        if let Some(builtin) = func {
+            return (builtin, Args(parts.map(|s| s.to_string()).collect()));
+        }
+
+        if let Some(path) = get_path(name) {
+            return (
+                Cmd::External(name.to_string(), path),
+                Args(parts.map(|s| s.to_string()).collect()),
+            );
+        }
+
+        return (Cmd::NotFound(name.to_string()), Args(vec![]));
     }
 
     (Cmd::Noop, Args(vec![]))
+}
+
+fn get_path(cmd: &str) -> Option<String> {
+    todo!("If the command is not a builtin, your shell must go through every directory in PATH. For each directory:
+
+    Check if a file with the command name exists.
+    Check if the file has execute permissions.
+    If the file exists and has execute permissions, print <command> is <full_path> and stop.
+    If the file exists but lacks execute permissions, skip it and continue to the next directory.")
 }

@@ -137,7 +137,7 @@ impl Environment {
         match interpret.0 {
             Cmd::Noop => Cmd::NotFound(EMPTY_STRING).evaluate(&self, args),
             Cmd::NotFound(name) => Some(format!("{name}: not found")),
-            Cmd::External(name, path) => Some(format!("{name}: is {}", path.to_str().unwrap())),
+            Cmd::External(name, path) => Some(format!("{name} is {}", path.to_str().unwrap())),
             _ => Some(format!("{} is a shell builtin", &interpret.0.get_name())),
         }
     }

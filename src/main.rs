@@ -115,6 +115,7 @@ impl Environment {
                     Args(parts.map(|s| s.to_string()).collect()),
                 );
             }
+            println!("{:?}", self.paths);
 
             return (Cmd::NotFound(name.to_string()), Args(vec![]));
         }

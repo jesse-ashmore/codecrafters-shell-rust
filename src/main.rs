@@ -1,7 +1,8 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
 use std::{
-    env, os,
+    env,
+    os::{self, unix::fs::PermissionsExt},
     path::{self, Path, PathBuf},
     vec,
 };
@@ -106,16 +107,23 @@ impl Environment {
                 return (builtin, Args(parts.map(|s| s.to_string()).collect()));
             }
 
-            if let Some(found_in_path) = self.paths.iter().find(|path| match path.file_name() {
-                Some(path_name) => name == path_name,
-                None => todo!(),
-            }) {
-                return (
-                    Cmd::External(name.to_string(), found_in_path.clone()),
-                    Args(parts.map(|s| s.to_string()).collect()),
-                );
+            for dir in &self.paths {
+                let full_path = dir.join(name);
+                // Check if file exists and is executable
+
+                if full_path.exists() {
+                    if let Ok(metadata) = full_path.metadata() {
+                        let permissions = metadata.permissions();
+                        let mode = permissions.mode();
+                        if mode & 0o111 != 0 {
+                            return (
+                                Cmd::External(name.to_string(), full_path),
+                                Args(parts.map(|s| s.to_string()).collect()),
+                            );
+                        }
+                    }
+                }
             }
-            println!("{name} {:?}", self.paths);
 
             return (Cmd::NotFound(name.to_string()), Args(vec![]));
         }

@@ -1,11 +1,7 @@
 #[allow(unused_imports)]
 use std::io::{self, Write};
-use std::{
-    env,
-    os::{self, unix::fs::PermissionsExt},
-    path::{self, Path, PathBuf},
-    vec,
-};
+use std::process::Command as StdCommand;
+use std::{env, path::PathBuf, vec};
 
 use itertools::Itertools;
 
@@ -22,7 +18,7 @@ enum Cmd {
     NotFound(String),
     Echo(String),
     Type(String),
-    External(String, PathBuf),
+    External(Executable),
 }
 
 impl Cmd {
@@ -32,7 +28,7 @@ impl Cmd {
             Cmd::Exit(name) | Cmd::NotFound(name) | Cmd::Echo(name) | Cmd::Type(name) => {
                 name.to_string()
             }
-            Cmd::External(name, _) => name.to_string(),
+            Cmd::External(exec) => exec.name.clone(),
         }
     }
 
@@ -54,7 +50,10 @@ impl Command for Cmd {
             Cmd::Echo(_) => Some(args.0.join(" ")),
             Cmd::Noop => Some(EMPTY_STRING),
             Cmd::Type(_) => env.builtin_type(args),
-            Cmd::External(_, _) => todo!("Must implement evaluate for Cmd::External"),
+            Cmd::External(exec) => {
+                exec.execute(args).wait().expect("command wasn't running");
+                Some(EMPTY_STRING)
+            }
         }
     }
 }
@@ -65,7 +64,9 @@ fn main() {
         let (cmd, args) = env.read();
 
         if let Some(output) = cmd.evaluate(&env, args) {
-            println!("{output}");
+            if !output.is_empty() {
+                println!("{output}");
+            }
             io::stdout().flush().unwrap();
         } else {
             break;
@@ -85,6 +86,67 @@ fn get_paths() -> Option<Vec<PathBuf>> {
 
 struct Environment {
     paths: Vec<PathBuf>,
+}
+
+#[cfg(target_family = "unix")]
+fn get_executable(path: &PathBuf) -> Option<PathBuf> {
+    use std::os::unix::fs::PermissionsExt;
+    if let Ok(metadata) = path.metadata() {
+        let permissions = metadata.permissions();
+        let mode = permissions.mode();
+        if mode & 0o111 != 0 {
+            return Some(path.clone());
+        }
+    }
+    None
+}
+
+#[cfg(target_family = "windows")]
+fn get_executable(path: &PathBuf) -> Option<PathBuf> {
+    // If the path provided already has an .exe extension
+    if path.extension().is_some_and(|ext| ext == "exe") && path.exists() {
+        return Some(path.clone());
+    }
+    // There is no extension in the path we are looking for
+    let with_ext = path.with_extension("exe");
+    if with_ext.exists() {
+        return Some(with_ext);
+    }
+    None
+}
+
+#[derive(PartialEq, Eq)]
+struct Executable {
+    name: String,
+    path: PathBuf,
+}
+
+impl Executable {
+    fn new(name: &str, path: PathBuf) -> Option<Executable> {
+        if path.exists() {
+            return get_executable(&path).map(|exec| Executable {
+                name: name.to_string(),
+                path: exec,
+            });
+        }
+
+        None
+    }
+
+    fn execute(&self, args: Args) -> std::process::Child {
+        // use std::os::windows::process::CommandExt;
+        StdCommand::new(self.path.file_name().unwrap())
+            .current_dir(self.path.parent().unwrap())
+            .args(&args.0)
+            .spawn()
+            .unwrap_or_else(|_| {
+                panic!(
+                    "{} ({}) failed to start",
+                    self.name,
+                    self.path.to_str().unwrap()
+                )
+            })
+    }
 }
 
 impl Environment {
@@ -110,18 +172,11 @@ impl Environment {
             for dir in &self.paths {
                 let full_path = dir.join(name);
                 // Check if file exists and is executable
-
-                if full_path.exists() {
-                    if let Ok(metadata) = full_path.metadata() {
-                        let permissions = metadata.permissions();
-                        let mode = permissions.mode();
-                        if mode & 0o111 != 0 {
-                            return (
-                                Cmd::External(name.to_string(), full_path),
-                                Args(parts.map(|s| s.to_string()).collect()),
-                            );
-                        }
-                    }
+                if let Some(executable) = Executable::new(name, full_path) {
+                    return (
+                        Cmd::External(executable),
+                        Args(parts.map(|s| s.to_string()).collect()),
+                    );
                 }
             }
 
@@ -135,9 +190,11 @@ impl Environment {
         let interpret = self.parse_cmd(&args.0.join(" "));
 
         match interpret.0 {
-            Cmd::Noop => Cmd::NotFound(EMPTY_STRING).evaluate(&self, args),
+            Cmd::Noop => Cmd::NotFound(EMPTY_STRING).evaluate(self, args),
             Cmd::NotFound(name) => Some(format!("{name}: not found")),
-            Cmd::External(name, path) => Some(format!("{name} is {}", path.to_str().unwrap())),
+            Cmd::External(exec) => {
+                Some(format!("{} is {}", exec.name, exec.path.to_str().unwrap()))
+            }
             _ => Some(format!("{} is a shell builtin", &interpret.0.get_name())),
         }
     }
